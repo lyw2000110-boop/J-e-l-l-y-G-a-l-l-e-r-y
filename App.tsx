@@ -16,7 +16,6 @@ import {
   StickyNoteIcon, 
   ChevronLeftIcon, 
   ChevronRightIcon, 
-  Edit3Icon, 
   ZoomInIcon, 
   ZoomOutIcon, 
   MoveIcon, 
@@ -25,10 +24,10 @@ import {
   PencilIcon, 
   CheckIcon,
   Undo2Icon,
-  Redo2Icon
+  Redo2Icon,
+  EditIcon
 } from 'lucide-react';
 
-// IndexedDB Utility for Large Data Persistence
 const DB_NAME = 'JellyGalleryDB';
 const STORE_NAME = 'folders';
 const DB_VERSION = 1;
@@ -72,38 +71,38 @@ const getFoldersFromDB = async (): Promise<Folder[]> => {
 const translations = {
   zh: {
     title: "果冻画册",
-    searchPlaceholder: "搜名字、标签或便签...",
-    folderSearchPlaceholder: "在此文件夹内搜索标签...",
+    searchPlaceholder: "搜名字、标签...",
+    folderSearchPlaceholder: "在此搜索...",
     newFolder: "新建文件夹",
+    editFolder: "编辑文件夹",
     create: "创建",
     cancel: "取消",
     all: "全部显示",
     tags: "标签",
     notes: "便签",
-    images: "张照片",
+    images: "个果冻",
     empty: "空空如也...",
-    confirmDelete: "确定要删掉这个果冻盒吗？",
+    confirmDelete: "确定要删掉这个盒子吗？",
     save: "保存",
-    editImage: "编辑图片详情",
+    editImage: "编辑图片",
     filter: "筛选",
     tagLibrary: "我的标签库",
     readingMode: "阅览模式",
     exitReading: "退出",
-    normalMode: "普通模式",
-    addTag: "添加标签...",
+    addTag: "加标签...",
     add: "添加",
     aiSummary: "AI 总结",
-    summarizing: "正在思考...",
-    summaryTitle: "文件夹 AI 简报",
-    holdToDrag: "长按图片以开启拖拽",
+    summarizing: "思考中...",
+    summaryTitle: "AI 简报",
+    holdToDrag: "长按以开启拖拽",
     annotate: "批注",
-    saveAnnotation: "保存批注",
+    saveAnnotation: "保存",
     clear: "清除",
     loading: "载入中...",
     newNote: "新建便签",
     editNote: "编辑便签",
     saveNote: "保存便签",
-    networkError: "网络连接似乎有问题，请检查网络后再试哦！📡",
+    networkError: "网络连接似乎有问题哦！",
     editHint: "长按可进行编辑",
     delete: "删除",
     undo: "撤回",
@@ -111,30 +110,30 @@ const translations = {
   },
   en: {
     title: "Jelly Gallery",
-    searchPlaceholder: "Search names, tags, notes...",
-    folderSearchPlaceholder: "Search tags in this folder...",
+    searchPlaceholder: "Search names, tags...",
+    folderSearchPlaceholder: "Search...",
     newFolder: "New Folder",
+    editFolder: "Edit Folder",
     create: "Create",
     cancel: "Cancel",
-    all: "Show All",
+    all: "All",
     tags: "TAGS",
     notes: "NOTES",
-    images: "images",
+    images: "items",
     empty: "It's empty here...",
-    confirmDelete: "Delete this folder and all contents?",
+    confirmDelete: "Delete this folder?",
     save: "Save",
-    editImage: "Edit Image Details",
+    editImage: "Edit Image",
     filter: "Filter",
     tagLibrary: "Tag Library",
     readingMode: "Reading Mode",
     exitReading: "Exit",
-    normalMode: "Normal Mode",
     addTag: "Add tag...",
     add: "Add",
     aiSummary: "AI Summary",
     summarizing: "Thinking...",
-    summaryTitle: "Folder AI Brief",
-    holdToDrag: "Hold to enable dragging",
+    summaryTitle: "AI Brief",
+    holdToDrag: "Long press to drag",
     annotate: "Annotate",
     saveAnnotation: "Save",
     clear: "Clear",
@@ -142,15 +141,15 @@ const translations = {
     newNote: "New Note",
     editNote: "Edit Note",
     saveNote: "Save Note",
-    networkError: "Network issue detected, please check your connection! 📡",
-    editHint: "Long press to edit",
+    networkError: "Network issue detected!",
+    editHint: "Hold to edit",
     delete: "Delete",
     undo: "Undo",
     redo: "Redo"
   }
 };
 
-const DEFAULT_BASE_SCALE = 1.4; // 140% as the new 100%
+const DEFAULT_BASE_SCALE = 1.4;
 
 const App: React.FC = () => {
   const [lang, setLang] = useState<'zh' | 'en'>(() => {
@@ -163,6 +162,7 @@ const App: React.FC = () => {
   
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+  const [editingFolder, setEditingFolder] = useState<Folder | null>(null);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -170,15 +170,12 @@ const App: React.FC = () => {
   const [selectedTagFilter, setSelectedTagFilter] = useState<string | null>(null);
   const [isLogoBouncing, setIsLogoBouncing] = useState(false);
 
-  // Note States
   const [editingNote, setEditingNote] = useState<NoteItem | null>(null);
   const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
 
-  // AI Summary States
   const [summaryText, setSummaryText] = useState<string | null>(null);
   const [isSummarizing, setIsSummarizing] = useState(false);
 
-  // Reading Mode States
   const [isReadingMode, setIsReadingMode] = useState(false);
   const [readingIndex, setReadingIndex] = useState(0);
   const [zoomScale, setZoomScale] = useState(DEFAULT_BASE_SCALE);
@@ -189,8 +186,8 @@ const App: React.FC = () => {
   const pointerStartPos = useRef({ x: 0, y: 0 });
   const longPressTimer = useRef<number | null>(null);
   const gridLongPressTimer = useRef<number | null>(null);
+  const folderLongPressTimer = useRef<number | null>(null);
 
-  // Annotation States
   const [isAnnotating, setIsAnnotating] = useState(false);
   const [strokeColor, setStrokeColor] = useState('#e91e63');
   const [history, setHistory] = useState<string[]>([]);
@@ -207,7 +204,6 @@ const App: React.FC = () => {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Initial Load from IndexedDB
   useEffect(() => {
     getFoldersFromDB().then((data) => {
       setFolders(data);
@@ -215,7 +211,6 @@ const App: React.FC = () => {
     });
   }, []);
 
-  // Sync to IndexedDB on change
   useEffect(() => {
     if (!isInitializing) {
       saveFoldersToDB(folders);
@@ -282,6 +277,27 @@ const App: React.FC = () => {
     setIsCreatingFolder(false);
   };
 
+  const saveFolderRename = () => {
+    if (!editingFolder || !editingFolder.name.trim()) return;
+    setFolders(prev => prev.map(f => f.id === editingFolder.id ? editingFolder : f));
+    setEditingFolder(null);
+  };
+
+  const handleFolderPointerDown = (folder: Folder) => {
+    folderLongPressTimer.current = window.setTimeout(() => {
+      setEditingFolder({ ...folder });
+      folderLongPressTimer.current = null;
+    }, 600);
+  };
+
+  const handleFolderPointerUp = (folder: Folder) => {
+    if (folderLongPressTimer.current) {
+      clearTimeout(folderLongPressTimer.current);
+      folderLongPressTimer.current = null;
+      setActiveFolderId(folder.id);
+    }
+  };
+
   const handleImagePick = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || !activeFolderId) return;
@@ -304,6 +320,15 @@ const App: React.FC = () => {
     };
     reader.readAsDataURL(file);
     if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const addNewTag = () => {
+    if (!newTagInput.trim()) return;
+    const tag = newTagInput.trim().toLowerCase();
+    if (!editTags.includes(tag)) {
+      setEditTags([...editTags, tag]);
+    }
+    setNewTagInput('');
   };
 
   const saveImageChanges = () => {
@@ -335,7 +360,6 @@ const App: React.FC = () => {
 
   const saveNote = () => {
     if (!editingNote || !activeFolderId) return;
-    
     setFolders(prev => prev.map(f => {
       if (f.id === activeFolderId) {
         const existingNotes = f.notes || [];
@@ -351,11 +375,12 @@ const App: React.FC = () => {
     setIsNoteModalOpen(false);
   };
 
-  const deleteFolder = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const deleteFolder = (id: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
     if (confirm(t.confirmDelete)) {
       setFolders(folders.filter(f => f.id !== id));
       if (activeFolderId === id) setActiveFolderId(null);
+      setEditingFolder(null);
     }
   };
 
@@ -472,12 +497,6 @@ const App: React.FC = () => {
     }
   };
 
-  const resetReading = () => {
-    if (isAnnotating) return;
-    setZoomScale(DEFAULT_BASE_SCALE);
-    setPanOffset({ x: 0, y: 0 });
-  };
-
   const startAnnotating = () => {
     if (currentReadingItem.itemType !== 'image') return;
     setIsAnnotating(true);
@@ -555,13 +574,10 @@ const App: React.FC = () => {
     const canvas = annotationCanvasRef.current;
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;
-
     const current = history[history.length - 1];
     const prev = history[history.length - 2];
-    
     setRedoStack(prevRedo => [current, ...prevRedo]);
     setHistory(prevHistory => prevHistory.slice(0, -1));
-
     const img = new Image();
     img.onload = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -575,11 +591,9 @@ const App: React.FC = () => {
     const canvas = annotationCanvasRef.current;
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;
-
     const next = redoStack[0];
     setHistory(prev => [...prev, next]);
     setRedoStack(prev => prev.slice(1));
-
     const img = new Image();
     img.onload = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -592,7 +606,6 @@ const App: React.FC = () => {
     const canvas = annotationCanvasRef.current;
     if (!canvas) return;
     const newData = canvas.toDataURL('image/png');
-
     setFolders(prev => prev.map(f => {
       if (f.id === activeFolderId) {
         return {
@@ -604,7 +617,6 @@ const App: React.FC = () => {
       }
       return f;
     }));
-    
     setIsAnnotating(false);
     setHistory([]);
     setRedoStack([]);
@@ -616,23 +628,16 @@ const App: React.FC = () => {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const prompt = `你是一个专业的相册分析助手。请总结这个名为 "${activeFolder.name}" 的文件夹里的内容。
-      文件夹包含 ${activeFolder.images.length} 张图片和 ${activeFolder.notes?.length || 0} 条便签。
-      图片标签和备注如下：
-      ${activeFolder.images.map(img => `- 图片标签: ${img.tags.join(', ')}, 备注: ${img.note}`).join('\n')}
-      便签内容如下：
-      ${(activeFolder.notes || []).map(note => `- 便签: ${note.content}`).join('\n')}
-      
-      请提供一个简短幽默的总结，总字数严禁超过300字。
-      注意：请勿使用 "*" 符号进行任何加粗或列表标记，直接输出纯文本。`;
-
+      包含 ${activeFolder.images.length} 张图片和 ${activeFolder.notes?.length || 0} 条便签。
+      请提供一个极其简短幽默的总结（50字以内）。
+      严禁使用 "*" 符号。`;
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt
       });
-      const cleanText = (response.text || "总结失败，请重试。").replaceAll('*', '');
+      const cleanText = (response.text || "总结失败").replaceAll('*', '');
       setSummaryText(cleanText);
     } catch (error) {
-      console.error(error);
       setSummaryText(t.networkError);
     } finally {
       setIsSummarizing(false);
@@ -651,44 +656,37 @@ const App: React.FC = () => {
     );
   };
 
-  const folderColors = [
-    '#fff9c4', // Yellow
-    '#e1f5fe', // Blue
-    '#fce4ec', // Pink
-    '#f1f8e9', // Green
-    '#f3e5f5'  // Purple
-  ];
+  const folderColors = ['#fff9c4', '#e1f5fe', '#fce4ec', '#f1f8e9', '#f3e5f5'];
 
   if (isInitializing) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[#f7f9ff]">
-        <Loader2Icon className="animate-spin text-[#2196f3]" size={48} />
-        <p className="mt-4 font-black text-[#1a1a1a]">{t.loading}</p>
+        <Loader2Icon className="animate-spin text-[#2196f3]" size={40} />
+        <p className="mt-4 font-black text-[#1a1a1a] text-xs">{t.loading}</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-col max-w-md mx-auto bg-[#f7f9ff] overflow-hidden text-[#1a1a1a] relative">
-      <header className="p-6 bg-[#fff0f6] sticky top-0 z-20 shadow-sm">
-        <div className="flex items-center justify-between mb-4 gap-2">
-          <div className="flex items-center gap-3 min-w-0 flex-1">
+    <div className="min-h-screen flex flex-col w-full max-w-screen-md mx-auto bg-[#f7f9ff] overflow-hidden text-[#1a1a1a] relative">
+      <header className="px-5 py-4 bg-[#fff0f6] sticky top-0 z-20 shadow-sm transition-all duration-300">
+        <div className="flex items-center justify-between mb-3 gap-2">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
             {activeFolderId ? (
               <button onClick={() => { setActiveFolderId(null); setFolderSearchQuery(''); setIsReadingMode(false); }} className="jelly-button p-2 bg-white flex-shrink-0">
-                <ArrowLeftIcon size={24} />
+                <ArrowLeftIcon size={20} />
               </button>
             ) : (
               <div 
                 className={`bg-[#ffeb3b] p-2 jelly-button cursor-pointer flex-shrink-0 ${isLogoBouncing ? 'animate-jelly' : ''}`}
-                onMouseEnter={() => setIsLogoBouncing(true)}
-                onAnimationEnd={() => setIsLogoBouncing(false)}
                 onClick={() => setIsLogoBouncing(true)}
+                onAnimationEnd={() => setIsLogoBouncing(false)}
               >
-                <TagIcon className="text-[#e91e63]" size={28} />
+                <TagIcon className="text-[#e91e63]" size={24} />
               </div>
             )}
-            <div className="min-w-0 overflow-visible">
-              <h1 className="text-2xl tracking-tight">
+            <div className="min-w-0">
+              <h1 className="text-xl tracking-tight">
                 {activeFolderId ? (
                   <span className="font-black truncate block">{activeFolder?.name}</span>
                 ) : (
@@ -697,116 +695,81 @@ const App: React.FC = () => {
               </h1>
             </div>
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-1.5 flex-shrink-0">
             {activeFolderId && (
               <>
-                <button 
-                  onClick={handleAiSummarize}
-                  disabled={isSummarizing}
-                  className={`jelly-button p-3 bg-white ${isSummarizing ? 'opacity-50' : ''}`}
-                  title={t.aiSummary}
-                >
-                  {isSummarizing ? <Loader2Icon size={24} className="animate-spin text-[#9c27b0]" /> : <SparklesIcon size={24} className="text-[#9c27b0]" />}
+                <button onClick={handleAiSummarize} disabled={isSummarizing} className="jelly-button p-2.5 bg-white">
+                  {isSummarizing ? <Loader2Icon size={20} className="animate-spin text-[#9c27b0]" /> : <SparklesIcon size={20} className="text-[#9c27b0]" />}
                 </button>
-                <button 
-                  onClick={openNewNote}
-                  className="jelly-button p-3 bg-[#eef2ff] text-[#1a1a1a]"
-                  title={t.newNote}
-                >
-                  <StickyNoteIcon size={24} strokeWidth={3} />
+                <button onClick={openNewNote} className="jelly-button p-2.5 bg-[#eef2ff] text-[#1a1a1a]">
+                  <StickyNoteIcon size={20} strokeWidth={3} />
                 </button>
               </>
             )}
             {!activeFolderId && (
-              <button 
-                onClick={() => setLang(l => l === 'zh' ? 'en' : 'zh')}
-                className="jelly-button flex items-center gap-1 bg-white px-3 py-1.5 text-xs font-bold mr-1"
-              >
-                <LanguagesIcon size={14} />
+              <button onClick={() => setLang(l => l === 'zh' ? 'en' : 'zh')} className="jelly-button bg-white px-2 py-1.5 text-[10px] font-bold">
                 {lang === 'zh' ? 'EN' : '中'}
               </button>
             )}
-            <button 
-              onClick={() => {
-                if (activeFolderId) {
-                  fileInputRef.current?.click();
-                } else {
-                  setIsCreatingFolder(true);
-                }
-              }}
-              className="jelly-button p-3 bg-[#4caf50] text-white"
-            >
-              <PlusIcon size={24} strokeWidth={3} />
+            <button onClick={() => activeFolderId ? fileInputRef.current?.click() : setIsCreatingFolder(true)} className="jelly-button p-2.5 bg-[#4caf50] text-white">
+              <PlusIcon size={20} strokeWidth={3} />
             </button>
           </div>
           <input type="file" accept="image/*" ref={fileInputRef} className="hidden" onChange={handleImagePick} />
         </div>
 
         {!activeFolderId ? (
-          <div className="flex gap-3">
+          <div className="flex gap-2">
             <div className="relative flex-1">
-              <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-[#1a1a1a]" size={20} />
+              <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-[#1a1a1a]" size={16} />
               <input 
                 type="text"
                 placeholder={t.searchPlaceholder}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-white rounded-2xl py-3 pl-12 pr-4 text-sm font-bold outline-none shadow-sm"
+                className="w-full bg-white rounded-xl py-2.5 pl-9 pr-3 text-xs font-bold outline-none shadow-sm"
               />
             </div>
-            <button 
-              onClick={() => setIsFilterOpen(!isFilterOpen)}
-              className={`jelly-button p-3 ${isFilterOpen || selectedTagFilter ? 'bg-[#2196f3] text-white' : 'bg-white text-[#1a1a1a]'}`}
-            >
-              <FilterIcon size={20} strokeWidth={3} />
+            <button onClick={() => setIsFilterOpen(!isFilterOpen)} className={`jelly-button p-2.5 ${isFilterOpen || selectedTagFilter ? 'bg-[#2196f3] text-white' : 'bg-white'}`}>
+              <FilterIcon size={18} strokeWidth={3} />
             </button>
           </div>
         ) : (
           <div className="relative">
-            <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-[#1a1a1a]" size={20} />
+            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-[#1a1a1a]" size={16} />
             <input 
               type="text"
               placeholder={t.folderSearchPlaceholder}
               value={folderSearchQuery}
               onChange={(e) => setFolderSearchQuery(e.target.value)}
-              className="w-full bg-white rounded-2xl py-3 pl-12 pr-4 text-sm font-bold outline-none shadow-sm"
+              className="w-full bg-white rounded-xl py-2.5 pl-9 pr-3 text-xs font-bold outline-none shadow-sm"
             />
-            <div className="mt-2 text-[10px] text-slate-400 font-bold px-2">{t.editHint}</div>
           </div>
         )}
       </header>
 
-      <main className="flex-1 overflow-y-auto p-6 space-y-6 pb-20 z-10 no-scrollbar">
+      <main className="flex-1 overflow-y-auto px-5 py-6 space-y-5 pb-20 no-scrollbar">
         {!activeFolderId ? (
-          <div className="grid grid-cols-2 gap-5">
+          <div className="grid grid-cols-2 gap-4">
             {filteredFolders.length === 0 ? (
-              <div className="col-span-2 text-center py-20">
-                <div className="bg-white inline-block p-6 jelly-card mb-4">
-                  <FolderIcon size={64} className="text-[#ff9800] opacity-50" />
-                </div>
-                <p className="font-black text-xl text-[#1a1a1a]">{t.empty}</p>
+              <div className="col-span-full text-center py-20 opacity-30">
+                <FolderIcon size={48} className="mx-auto mb-2" />
+                <p className="font-bold text-xs">{t.empty}</p>
               </div>
             ) : (
               filteredFolders.map((folder, idx) => (
                 <div 
                   key={folder.id}
-                  onClick={() => setActiveFolderId(folder.id)}
-                  className="jelly-card p-4 relative group cursor-pointer flex flex-col items-center justify-center bg-white"
+                  onPointerDown={() => handleFolderPointerDown(folder)}
+                  onPointerUp={() => handleFolderPointerUp(folder)}
+                  onPointerLeave={() => { if(folderLongPressTimer.current) { clearTimeout(folderLongPressTimer.current); folderLongPressTimer.current = null; } }}
+                  className="jelly-card p-3 relative flex flex-col items-center justify-center bg-white aspect-square touch-none cursor-pointer"
                 >
-                  <div 
-                    className="w-12 h-12 q-folder-blob flex items-center justify-center mb-2 border border-black/5 shadow-inner"
-                    style={{ backgroundColor: folderColors[idx % folderColors.length] }}
-                  >
-                    <FolderIcon size={22} className="text-[#1a1a1a]/30" strokeWidth={1.5} />
+                  <div className="w-10 h-10 q-folder-blob flex items-center justify-center mb-1.5 border border-black/5 shadow-inner pointer-events-none" style={{ backgroundColor: folderColors[idx % folderColors.length] }}>
+                    <FolderIcon size={18} className="text-[#1a1a1a]/30" strokeWidth={1.5} />
                   </div>
-                  <div className="font-black text-center truncate w-full px-1 text-sm">{folder.name}</div>
-                  <div className="text-[9px] font-bold text-slate-400/80">{(folder.images.length || 0) + (folder.notes?.length || 0)} 件果冻</div>
-                  <button 
-                    onClick={(e) => deleteFolder(folder.id, e)}
-                    className="absolute -top-1.5 -right-1.5 jelly-button p-1 bg-[#ff5252] text-white"
-                  >
-                    <TrashIcon size={12} strokeWidth={3} />
-                  </button>
+                  <div className="font-black text-center truncate w-full px-1 text-xs pointer-events-none">{folder.name}</div>
+                  <div className="text-[8px] font-bold text-slate-400 pointer-events-none">{(folder.images.length || 0) + (folder.notes?.length || 0)} {t.images}</div>
                 </div>
               ))
             )}
@@ -814,8 +777,8 @@ const App: React.FC = () => {
         ) : (
           <div className="grid grid-cols-3 gap-3">
             {filteredItems.length === 0 ? (
-              <div className="col-span-3 text-center py-10">
-                <p className="font-black text-slate-400">{t.empty}</p>
+              <div className="col-span-full text-center py-10 opacity-30">
+                <p className="font-bold text-xs">{t.empty}</p>
               </div>
             ) : (
               filteredItems.map((item: any) => (
@@ -824,23 +787,19 @@ const App: React.FC = () => {
                   onPointerDown={() => handleGridPointerDown(item)}
                   onPointerUp={() => handleGridPointerUp(item)}
                   onPointerLeave={() => { if(gridLongPressTimer.current) { clearTimeout(gridLongPressTimer.current); gridLongPressTimer.current = null; } }}
-                  className="jelly-card aspect-square overflow-hidden relative p-1.5 bg-white cursor-pointer transition-all touch-none"
+                  className="jelly-card aspect-square overflow-hidden relative p-1 bg-white cursor-pointer touch-none"
                 >
                   {item.itemType === 'image' ? (
                     <>
-                      <img src={item.data} alt={item.name} className="w-full h-full object-cover rounded-[1.25rem]" />
+                      <img src={item.data} alt={item.name} className="w-full h-full object-cover rounded-[1.5rem]" />
                       {item.tags.length > 0 && (
-                        <div className="absolute bottom-1.5 left-1.5 right-1.5 flex flex-wrap gap-0.5 overflow-hidden">
-                          {item.tags.slice(0, 1).map((tag: string) => (
-                            <span key={tag} className="bg-black/80 text-white text-[10px] px-1.5 py-0.5 rounded-md font-black whitespace-nowrap">#{tag}</span>
-                          ))}
-                        </div>
+                        <div className="absolute bottom-1 left-1 bg-black/70 text-white text-[7px] px-1 rounded font-black">#{item.tags[0]}</div>
                       )}
                     </>
                   ) : (
-                    <div className="w-full h-full bg-[#fdfcf0] p-3 rounded-[1.25rem] flex flex-col justify-between border-2 border-dashed border-black/10">
-                      <StickyNoteIcon size={18} className="text-black/30" />
-                      <p className="text-[9px] font-bold leading-tight line-clamp-3 overflow-hidden text-ellipsis text-slate-600">{item.content}</p>
+                    <div className="w-full h-full bg-[#fdfcf0] p-2 rounded-[1.5rem] flex flex-col justify-between border border-dashed border-black/5">
+                      <StickyNoteIcon size={14} className="text-black/20" />
+                      <p className="text-[8px] font-bold leading-tight line-clamp-3 text-slate-500">{item.content}</p>
                     </div>
                   )}
                 </div>
@@ -850,218 +809,109 @@ const App: React.FC = () => {
         )}
       </main>
 
-      {/* Note Edit Modal */}
-      {isNoteModalOpen && editingNote && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[120] flex items-center justify-center p-6">
-          <div className="jelly-card bg-[#fdfcf0] w-full max-w-sm p-6 animate-in zoom-in-95 duration-200">
-             <div className="flex justify-between items-center mb-4">
-              <div className="flex items-center gap-2 text-slate-700">
-                <StickyNoteIcon size={24} strokeWidth={3} />
-                <h3 className="text-xl font-black">{t.editNote}</h3>
-              </div>
-              <button onClick={() => setIsNoteModalOpen(false)} className="jelly-button p-2 bg-white">
-                <XIcon size={20} strokeWidth={3} />
-              </button>
+      {/* Edit Folder Modal */}
+      {editingFolder && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-6 bg-black/40 overlay-fade">
+          <div className="jelly-card bg-white w-full max-w-[280px] p-6 jelly-pop">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-black">{t.editFolder}</h3>
+              <button onClick={() => setEditingFolder(null)} className="p-1"><XIcon size={18}/></button>
             </div>
-            <textarea
-              autoFocus
-              value={editingNote.content}
-              onChange={(e) => setEditingNote({ ...editingNote, content: e.target.value })}
-              className="w-full bg-white rounded-2xl p-4 min-h-[200px] font-bold outline-none resize-none shadow-sm"
-              placeholder="..."
-            />
-            <div className="flex gap-4 mt-6">
+            <div className="mb-6">
+              <input 
+                autoFocus
+                type="text" 
+                value={editingFolder.name} 
+                onChange={(e) => setEditingFolder({ ...editingFolder, name: e.target.value })}
+                className="w-full bg-[#f0f4ff] rounded-xl p-3 font-black outline-none text-xs"
+                onKeyDown={(e) => e.key === 'Enter' && saveFolderRename()}
+              />
+            </div>
+            <div className="flex gap-3">
               <button 
-                onClick={(e) => deleteItem(activeFolderId!, editingNote.id, 'note', e)} 
-                className="jelly-button flex-1 py-4 bg-[#ff5252] text-white font-black text-lg"
+                onClick={() => deleteFolder(editingFolder.id)} 
+                className="jelly-button p-2.5 bg-[#ff5252] text-white flex-shrink-0"
               >
-                <TrashIcon size={20} className="inline mr-2" strokeWidth={3}/> {t.delete}
+                <TrashIcon size={18} strokeWidth={3} />
               </button>
               <button 
-                onClick={saveNote} 
-                className="jelly-button flex-[2] py-4 bg-[#4caf50] text-white font-black text-lg"
+                onClick={saveFolderRename} 
+                className="jelly-button flex-1 py-2.5 bg-[#2196f3] text-white font-black text-xs"
               >
-                <CheckIcon size={20} className="inline mr-2" strokeWidth={3}/> {t.saveNote}
+                {t.save}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {isReadingMode && activeFolder && currentReadingItem && (
-        <div 
-          className="fixed inset-0 reading-bg z-[100] flex flex-col items-center justify-center p-0 overflow-hidden select-none touch-none"
-          onWheel={handleWheel}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerLeave={onPointerUp}
-        >
-          <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center bg-gradient-to-b from-black/80 to-transparent z-[110] pointer-events-none">
-            <div className="glass-panel px-3 py-1.5 rounded-full border border-white/20 pointer-events-auto">
-              <span className="text-white font-black text-xs tracking-widest">
-                {readingIndex + 1} <span className="text-white/40 font-normal">/</span> {filteredItems.length}
-              </span>
+      {/* Note Edit Modal */}
+      {isNoteModalOpen && editingNote && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-6 bg-black/60 overlay-fade">
+          <div className="jelly-card bg-[#fdfcf0] w-full max-w-xs p-5 jelly-pop">
+             <div className="flex justify-between items-center mb-3">
+                <h3 className="text-lg font-black">{t.editNote}</h3>
+                <button onClick={() => setIsNoteModalOpen(false)}><XIcon size={18} /></button>
             </div>
-            
+            <textarea
+              autoFocus
+              value={editingNote.content}
+              onChange={(e) => setEditingNote({ ...editingNote, content: e.target.value })}
+              className="w-full bg-white rounded-xl p-3 min-h-[150px] font-bold outline-none text-xs shadow-inner"
+              placeholder="..."
+            />
+            <div className="flex gap-3 mt-4">
+              <button onClick={(e) => deleteItem(activeFolderId!, editingNote.id, 'note', e)} className="jelly-button flex-1 py-3 bg-[#ff5252] text-white font-black text-sm">{t.delete}</button>
+              <button onClick={saveNote} className="jelly-button flex-[2] py-3 bg-[#4caf50] text-white font-black text-sm">{t.saveNote}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isReadingMode && activeFolder && currentReadingItem && (
+        <div className="fixed inset-0 reading-bg z-[100] flex flex-col items-center justify-center p-0 select-none touch-none" onWheel={handleWheel} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}>
+          <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center bg-gradient-to-b from-black/60 to-transparent z-[110] pointer-events-none">
+            <div className="glass-panel px-3 py-1 rounded-full pointer-events-auto">
+              <span className="text-white font-black text-[10px] tracking-wider">{readingIndex + 1} / {filteredItems.length}</span>
+            </div>
             <div className="flex gap-2 pointer-events-auto">
                {!isAnnotating && currentReadingItem.itemType === 'image' && (
-                 <button 
-                  onClick={startAnnotating}
-                  className="jelly-button p-2 bg-[#ffeb3b] text-[#1a1a1a]"
-                >
-                  <PencilIcon size={18} strokeWidth={3} />
-                </button>
+                 <button onClick={startAnnotating} className="jelly-button p-2 bg-[#ffeb3b]"><PencilIcon size={16} /></button>
                )}
-               <button 
-                onClick={(e) => { e.stopPropagation(); setIsReadingMode(false); setIsAnnotating(false); }}
-                className="jelly-button px-4 py-2 bg-white text-black font-black flex items-center gap-2"
-              >
-                <XIcon size={16} strokeWidth={3} />
-                <span className="text-[10px] uppercase tracking-wider">{t.exitReading}</span>
-              </button>
+               <button onClick={() => { setIsReadingMode(false); setIsAnnotating(false); }} className="jelly-button px-3 py-2 bg-white text-black font-black text-[10px] uppercase">{t.exitReading}</button>
             </div>
           </div>
-
-          {!isAnnotating && (
-            <div className="absolute inset-x-3 top-1/2 -translate-y-1/2 flex justify-between pointer-events-none z-[110]">
-              <button 
-                onClick={prevReading}
-                className="pointer-events-auto jelly-button p-2.5 bg-white/10 text-white backdrop-blur-2xl border border-white/20 hover:bg-white/20 transition-all active:scale-90"
-              >
-                <ChevronLeftIcon size={24} strokeWidth={3} />
-              </button>
-              <button 
-                onClick={nextReading}
-                className="pointer-events-auto jelly-button p-2.5 bg-white/10 text-white backdrop-blur-2xl border border-white/20 hover:bg-white/20 transition-all active:scale-90"
-              >
-                <ChevronRightIcon size={24} strokeWidth={3} />
-              </button>
-            </div>
-          )}
-
-          {/* Zoom controls relocated to TOP, normalized so 1.4x is shown as 100% */}
-          <div className="absolute top-20 left-1/2 -translate-x-1/2 flex items-center gap-4 glass-panel px-5 py-2.5 rounded-[1.75rem] border border-white/20 shadow-2xl z-[110]">
-            <button 
-              onClick={(e) => {e.stopPropagation(); setZoomScale(prev => Math.max(prev - 0.2, 0.4))}} 
-              className="text-white p-1.5 hover:bg-white/10 rounded-full transition-colors pointer-events-auto"
-            >
-              <ZoomOutIcon size={20} />
-            </button>
-            <div className="flex flex-col items-center min-w-[50px]">
-              <span className="text-white text-base font-black tracking-tighter">
-                {Math.round((zoomScale / DEFAULT_BASE_SCALE) * 100)}%
-              </span>
-              <div className="w-12 h-0.5 bg-white/20 rounded-full mt-0.5 overflow-hidden">
-                <div 
-                  className="h-full bg-[#2196f3] transition-all" 
-                  style={{ width: `${Math.min(((zoomScale / DEFAULT_BASE_SCALE) / 4) * 100, 100)}%` }}
-                ></div>
-              </div>
-            </div>
-            <button 
-              onClick={(e) => {e.stopPropagation(); setZoomScale(prev => Math.min(prev + 0.2, 14))}} 
-              className="text-white p-1.5 hover:bg-white/10 rounded-full transition-colors pointer-events-auto"
-            >
-              <ZoomInIcon size={20} />
-            </button>
-          </div>
-
-          <div 
-            className={`w-full h-full flex items-center justify-center relative overflow-hidden transition-all duration-300 ${isDragReady ? 'cursor-grabbing' : isAnnotating ? 'cursor-crosshair' : 'cursor-grab'}`}
-          >
+          
+          <div className="w-full h-full flex items-center justify-center relative overflow-hidden transition-all duration-300">
             {isAnnotating ? (
-              <div className="relative flex items-center justify-center w-full h-full p-4 overflow-hidden">
-                <div 
-                  className="transition-transform duration-150 ease-out"
-                  style={{ transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomScale})` }}
-                >
-                  <canvas
-                    ref={annotationCanvasRef}
-                    onPointerDown={handleDrawStart}
-                    onPointerMove={handleDrawing}
-                    onPointerUp={handleDrawEnd}
-                    onPointerLeave={handleDrawEnd}
-                    className="max-w-[95vw] max-h-[85vh] shadow-[0_0_60px_rgba(0,0,0,0.8)] bg-black/20 touch-none rounded-lg border-2 border-white/20"
-                  />
+              <div className="relative flex items-center justify-center w-full h-full p-2">
+                <div style={{ transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomScale})` }}>
+                  <canvas ref={annotationCanvasRef} onPointerDown={handleDrawStart} onPointerMove={handleDrawing} onPointerUp={handleDrawEnd} className="max-w-[95vw] max-h-[80vh] shadow-2xl bg-black/10 rounded-lg touch-none" />
                 </div>
-                
-                <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-4 z-[120]">
-                  <div className="flex gap-4 glass-panel p-2 rounded-2xl border border-white/30 shadow-2xl">
-                    <button 
-                      onClick={handleUndo}
-                      disabled={history.length <= 1}
-                      className={`p-3 rounded-xl transition-all ${history.length <= 1 ? 'opacity-30' : 'bg-white/20 text-white hover:bg-white/30'}`}
-                      title={t.undo}
-                    >
-                      <Undo2Icon size={20} strokeWidth={3} />
-                    </button>
-                    <button 
-                      onClick={handleRedo}
-                      disabled={redoStack.length === 0}
-                      className={`p-3 rounded-xl transition-all ${redoStack.length === 0 ? 'opacity-30' : 'bg-white/20 text-white hover:bg-white/30'}`}
-                      title={t.redo}
-                    >
-                      <Redo2Icon size={20} strokeWidth={3} />
-                    </button>
-                  </div>
-
-                  <div className="flex gap-2 glass-panel p-2 rounded-full border border-white/30 shadow-xl">
+                <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-3 z-[120]">
+                  <div className="flex gap-2 glass-panel p-2 rounded-full">
                     {annotationColors.map(color => (
-                      <button
-                        key={color}
-                        onClick={() => setStrokeColor(color)}
-                        className={`w-8 h-8 rounded-full border-2 transition-transform ${strokeColor === color ? 'scale-125 border-white shadow-lg' : 'border-black/20 shadow-inner'}`}
-                        style={{ backgroundColor: color }}
-                      />
+                      <button key={color} onClick={() => setStrokeColor(color)} className={`w-6 h-6 rounded-full border-2 ${strokeColor === color ? 'scale-125 border-white' : 'border-transparent'}`} style={{ backgroundColor: color }} />
                     ))}
                   </div>
-                  <div className="flex gap-4">
-                     <button 
-                      onClick={() => { setIsAnnotating(false); setHistory([]); setRedoStack([]); }}
-                      className="jelly-button px-6 py-2.5 bg-[#ff5252] text-white font-black text-sm flex items-center gap-2"
-                    >
-                      <XIcon size={16} strokeWidth={3}/> {t.cancel}
-                    </button>
-                    <button 
-                      onClick={saveAnnotation}
-                      className="jelly-button px-6 py-2.5 bg-[#4caf50] text-white font-black text-sm flex items-center gap-2"
-                    >
-                      <CheckIcon size={16} strokeWidth={3}/> {t.saveAnnotation}
-                    </button>
+                  <div className="flex gap-3">
+                    <button onClick={() => setIsAnnotating(false)} className="jelly-button px-4 py-2 bg-[#ff5252] text-white font-black text-xs">{t.cancel}</button>
+                    <button onClick={saveAnnotation} className="jelly-button px-4 py-2 bg-[#4caf50] text-white font-black text-xs">{t.saveAnnotation}</button>
                   </div>
                 </div>
               </div>
             ) : (
               <div 
-                className={`transition-transform duration-150 ease-out flex items-center justify-center ${isDragReady ? 'scale-[1.02] drop-shadow-[0_0_20px_rgba(33,150,243,0.5)]' : ''}`}
-                style={{ 
-                  transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomScale})`
-                }}
+                className={`transition-transform duration-150 ease-out flex items-center justify-center ${isDragReady ? 'drop-shadow-xl' : ''}`}
+                style={{ transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomScale})` }}
               >
                 {currentReadingItem.itemType === 'image' ? (
-                  <img 
-                    src={(currentReadingItem as ImageItem).data} 
-                    alt="reading"
-                    className={`max-w-[98vw] max-h-[88vh] object-contain rounded-lg shadow-[0_0_60px_rgba(0,0,0,0.8)] transition-all ${isDragReady ? 'ring-4 ring-[#2196f3]' : ''}`}
-                    onDoubleClick={resetReading}
-                  />
+                  <img src={(currentReadingItem as ImageItem).data} alt="img" className="max-w-[95vw] max-h-[85vh] object-contain rounded-lg shadow-2xl" />
                 ) : (
-                  <div className="max-w-[85vw] max-h-[75vh] w-full jelly-card bg-[#fdfcf0] p-10 overflow-y-auto no-scrollbar">
-                    <StickyNoteIcon className="mb-6 text-black/10" size={40} strokeWidth={3} />
-                    <div className="text-xl font-bold text-slate-800 leading-relaxed whitespace-pre-wrap select-text">
-                        {currentReadingItem.content}
-                    </div>
+                  <div className="max-w-[80vw] w-full jelly-card bg-[#fdfcf0] p-8 max-h-[70vh] overflow-y-auto no-scrollbar">
+                    <div className="text-base font-bold text-slate-800 leading-relaxed whitespace-pre-wrap">{currentReadingItem.content}</div>
                   </div>
                 )}
-              </div>
-            )}
-            
-            {!isDragReady && !isAnnotating && (
-              <div className="absolute bottom-24 left-1/2 -translate-x-1/2 pointer-events-none bg-black/30 px-3 py-1.5 rounded-full border border-white/10 backdrop-blur-sm">
-                <span className="text-white text-[8px] font-black uppercase tracking-widest flex items-center gap-1.5">
-                   <MoveIcon size={12} /> {t.holdToDrag}
-                </span>
               </div>
             )}
           </div>
@@ -1069,157 +919,76 @@ const App: React.FC = () => {
       )}
 
       {summaryText && (
-        <div className="fixed inset-0 z-[130] flex items-center justify-center p-6 animate-in fade-in duration-300">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={() => setSummaryText(null)}></div>
-          <div className="jelly-card bg-white w-full max-w-sm p-8 z-10 animate-in zoom-in-95 duration-200">
-            <div className="flex items-center gap-3 mb-6 text-[#9c27b0]">
-              <SparklesIcon size={28} strokeWidth={3} />
-              <h3 className="text-2xl font-black">{t.summaryTitle}</h3>
-            </div>
-            <div className="bg-[#f3e5f5] p-5 rounded-2xl mb-8 shadow-inner overflow-y-auto max-h-[40vh] no-scrollbar text-sm">
-              <p className="font-bold leading-relaxed whitespace-pre-wrap">{summaryText}</p>
-            </div>
-            <button onClick={() => setSummaryText(null)} className="jelly-button w-full py-4 bg-[#9c27b0] text-white font-black text-lg">
-              {t.cancel}
-            </button>
+        <div className="fixed inset-0 z-[130] flex items-center justify-center p-6 bg-black/50 overlay-fade">
+          <div className="jelly-card bg-white w-full max-w-xs p-6 z-10 jelly-pop">
+            <h3 className="text-lg font-black mb-4 flex items-center gap-2 text-[#9c27b0]"><SparklesIcon size={20}/> {t.summaryTitle}</h3>
+            <div className="bg-[#f3e5f5] p-4 rounded-xl mb-6 text-xs font-bold leading-relaxed">{summaryText}</div>
+            <button onClick={() => setSummaryText(null)} className="jelly-button w-full py-3 bg-[#9c27b0] text-white font-black text-sm">{t.cancel}</button>
           </div>
         </div>
       )}
 
       {!activeFolderId && isFilterOpen && (
-        <div className="fixed inset-0 z-[100] flex flex-col justify-end p-6 animate-in fade-in duration-300">
-           <div 
-            className="absolute inset-0 bg-black/50 backdrop-blur-md" 
-            onClick={() => setIsFilterOpen(false)}
-          ></div>
-          <div className="jelly-card p-8 bg-white flex flex-col max-h-[75%] w-full z-10 animate-in slide-in-from-bottom-full duration-500 shadow-2xl">
-            <div className="flex items-center justify-between mb-8">
-              <div className="flex items-center gap-3 text-[#2196f3]">
-                <TagIcon size={24} strokeWidth={3} />
-                <span className="font-black uppercase tracking-[0.2em] text-lg">{t.tagLibrary}</span>
-              </div>
-              <button onClick={() => setIsFilterOpen(false)} className="jelly-button p-2 bg-[#f0f4ff]">
-                <XIcon size={20} strokeWidth={4} />
-              </button>
-            </div>
-            <div className="overflow-y-auto no-scrollbar flex-1">
-              <div className="flex flex-wrap gap-3 pb-8">
-                <button 
-                  onClick={() => {setSelectedTagFilter(null); setIsFilterOpen(false);}}
-                  className={`px-6 py-3 rounded-full text-base font-black transition-all ${!selectedTagFilter ? 'bg-[#2196f3] text-white' : 'bg-white text-[#1a1a1a] shadow-sm'}`}
-                >
-                  {t.all}
-                </button>
-                {allTags.map(tag => (
-                  <button 
-                    key={tag}
-                    onClick={() => { setSelectedTagFilter(tag); setIsFilterOpen(false); }}
-                    className={`px-6 py-3 rounded-full text-base font-black transition-all truncate max-w-full ${selectedTagFilter === tag ? 'bg-[#2196f3] text-white' : 'bg-[#fffde7] text-[#1a1a1a] shadow-sm active:scale-95'}`}
-                  >
-                    #{tag}
-                  </button>
-                ))}
-              </div>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 overlay-fade">
+          <div className="jelly-card p-6 bg-white w-full max-w-xs z-10 jelly-pop">
+            <h3 className="font-black text-sm uppercase tracking-widest mb-4 flex items-center gap-2 text-[#2196f3]"><TagIcon size={16}/> {t.tagLibrary}</h3>
+            <div className="flex flex-wrap gap-2 max-h-[50vh] overflow-y-auto no-scrollbar pb-4">
+              <button onClick={() => {setSelectedTagFilter(null); setIsFilterOpen(false);}} className={`px-4 py-2 rounded-full text-xs font-black ${!selectedTagFilter ? 'bg-[#2196f3] text-white' : 'bg-slate-100'}`}>{t.all}</button>
+              {allTags.map(tag => (
+                <button key={tag} onClick={() => { setSelectedTagFilter(tag); setIsFilterOpen(false); }} className={`px-4 py-2 rounded-full text-xs font-black ${selectedTagFilter === tag ? 'bg-[#2196f3] text-white' : 'bg-[#fffde7]'}`}>#{tag}</button>
+              ))}
             </div>
           </div>
         </div>
       )}
 
       {editingImage && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[110] flex items-center justify-center p-6">
-          <div className="jelly-card bg-white w-full max-w-sm overflow-y-auto max-h-[90vh] p-6 animate-in zoom-in-95 duration-200">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-black">{t.editImage}</h3>
-              <button onClick={() => setEditingImage(null)} className="jelly-button p-2 bg-white">
-                <XIcon size={20} strokeWidth={3} />
-              </button>
-            </div>
-            <img src={editingImage.image.data} className="w-full h-48 object-cover rounded-2xl mb-6 shadow-md" />
-            <div className="space-y-6">
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-6 bg-black/60 overlay-fade">
+          <div className="jelly-card bg-white w-full max-w-xs overflow-y-auto max-h-[85vh] p-5 jelly-pop">
+            <div className="flex justify-between items-center mb-4"><h3 className="text-lg font-black">{t.editImage}</h3><button onClick={() => setEditingImage(null)} className="p-1"><XIcon size={18}/></button></div>
+            <img src={editingImage.image.data} className="w-full h-40 object-cover rounded-xl mb-4 shadow-sm" />
+            <div className="space-y-4">
               <div>
-                <div className="flex items-center gap-2 mb-3 text-[#e91e63] font-black">
-                  <TagIcon size={20} />
-                  <span>{t.tags}</span>
-                </div>
-                <div className="flex flex-wrap gap-2 mb-3">
+                <div className="flex flex-wrap gap-1.5 mb-2">
                   {editTags.map(tag => (
-                    <span key={tag} className="bg-[#fce4ec] text-[#e91e63] px-3 py-1 rounded-full text-xs font-black flex items-center gap-2">
-                      #{tag}
-                      <button onClick={() => setEditTags(prev => prev.filter(t => t !== tag))}><XIcon size={12} strokeWidth={4}/></button>
-                    </span>
+                    <span key={tag} className="bg-[#fce4ec] text-[#e91e63] px-2 py-0.5 rounded-full text-[9px] font-black flex items-center gap-1">#{tag}<XIcon size={10} onClick={() => setEditTags(prev => prev.filter(t => t !== tag))}/></span>
                   ))}
                 </div>
                 <div className="flex gap-2">
                   <input 
                     type="text" 
-                    value={newTagInput}
-                    onChange={(e) => setNewTagInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && newTagInput.trim()) {
-                        if (!editTags.includes(newTagInput.trim().toLowerCase())) {
-                          setEditTags([...editTags, newTagInput.trim().toLowerCase()]);
-                        }
-                        setNewTagInput('');
-                      }
-                    }}
+                    value={newTagInput} 
+                    onChange={(e) => setNewTagInput(e.target.value)} 
+                    onKeyDown={(e) => e.key === 'Enter' && addNewTag()} 
                     placeholder={t.addTag} 
-                    className="flex-1 bg-[#fffde7] rounded-xl px-4 py-2 text-sm font-bold outline-none shadow-inner"
+                    className="flex-1 bg-[#fffde7] rounded-lg px-3 py-1.5 text-xs font-bold outline-none border border-black/5" 
                   />
                   <button 
-                    onClick={() => {
-                      if (newTagInput.trim() && !editTags.includes(newTagInput.trim().toLowerCase())) {
-                        setEditTags([...editTags, newTagInput.trim().toLowerCase()]);
-                        setNewTagInput('');
-                      }
-                    }} 
-                    className="jelly-button px-4 bg-[#ffeb3b] font-black text-xs"
+                    onClick={addNewTag}
+                    className="jelly-button px-3 py-1 bg-[#ffeb3b] text-[#1a1a1a] font-black text-[10px]"
                   >
                     {t.add}
                   </button>
                 </div>
               </div>
-              <div>
-                <div className="flex items-center gap-2 mb-2 text-[#ff9800] font-black">
-                  <StickyNoteIcon size={20} />
-                  <span>{t.notes}</span>
-                </div>
-                <textarea
-                  value={editNote}
-                  onChange={(e) => setEditNote(e.target.value)}
-                  placeholder="..."
-                  className="w-full bg-[#fff8e1] rounded-2xl p-4 text-sm font-bold focus:ring-4 focus:ring-[#ffc107] outline-none min-h-[80px] resize-none shadow-inner"
-                />
-              </div>
-              <div className="flex gap-4 pt-2">
-                <button onClick={(e) => deleteItem(editingImage.folderId, editingImage.image.id, 'image', e)} className="jelly-button flex-1 py-3 bg-[#ff5252] text-white font-black">
-                  <TrashIcon size={18} className="inline mr-2" />
-                </button>
-                <button onClick={saveImageChanges} className="jelly-button flex-[2] py-3 bg-[#2196f3] text-white font-black">
-                  <SaveIcon size={18} className="inline mr-2" />
-                  {t.save}
-                </button>
+              <textarea value={editNote} onChange={(e) => setEditNote(e.target.value)} placeholder="..." className="w-full bg-[#fff8e1] rounded-xl p-3 text-xs font-bold min-h-[60px] outline-none border border-black/5" />
+              <div className="flex gap-3">
+                <button onClick={(e) => deleteItem(editingImage.folderId, editingImage.image.id, 'image', e)} className="jelly-button flex-1 py-2.5 bg-[#ff5252] text-white font-black"><TrashIcon size={16} className="mx-auto"/></button>
+                <button onClick={saveImageChanges} className="jelly-button flex-[2] py-2.5 bg-[#2196f3] text-white font-black text-sm">{t.save}</button>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* New Folder Sheet */}
       {isCreatingFolder && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-md z-[120] flex items-center justify-center p-6">
-          <div className="jelly-card bg-white w-full max-w-xs p-8 animate-in zoom-in-95 duration-200">
-            <h3 className="text-2xl font-black mb-6">{t.newFolder}</h3>
-            <input 
-              autoFocus
-              type="text"
-              value={newFolderName}
-              onChange={(e) => setNewFolderName(e.target.value)}
-              className="w-full bg-[#f0f4ff] rounded-2xl p-4 mb-6 font-black outline-none shadow-inner"
-              onKeyDown={(e) => e.key === 'Enter' && createFolder()}
-            />
-            <div className="flex gap-4">
-              <button onClick={() => setIsCreatingFolder(false)} className="jelly-button flex-1 py-3 bg-[#f5f5f5] font-black">{t.cancel}</button>
-              <button onClick={createFolder} className="jelly-button flex-1 py-3 bg-[#2196f3] text-white font-black">{t.create}</button>
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-6 bg-black/40 overlay-fade">
+          <div className="jelly-card bg-white w-full max-w-[260px] p-6 jelly-pop">
+            <h3 className="text-lg font-black mb-4">{t.newFolder}</h3>
+            <input autoFocus type="text" value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} className="w-full bg-[#f0f4ff] rounded-xl p-3 mb-5 font-black outline-none text-xs border border-black/5" onKeyDown={(e) => e.key === 'Enter' && createFolder()} />
+            <div className="flex gap-3">
+              <button onClick={() => setIsCreatingFolder(false)} className="jelly-button flex-1 py-2.5 bg-slate-100 font-black text-xs">{t.cancel}</button>
+              <button onClick={createFolder} className="jelly-button flex-1 py-2.5 bg-[#2196f3] text-white font-black text-xs">{t.create}</button>
             </div>
           </div>
         </div>
