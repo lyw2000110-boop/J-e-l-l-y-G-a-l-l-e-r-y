@@ -1,0 +1,7 @@
+{
+  "name": "果冻画册 Smart Gallery",
+  "description": "A mobile-first private image organizer with AI-powered content summarization and folder-based categorization.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

@@ -1,0 +1,125 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Jelly Gallery Vault</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap');
+        
+        body {
+            background-color: #f7f9ff;
+            color: #1a1a1a;
+            font-family: 'Fredoka', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            overflow-x: hidden;
+        }
+
+        /* Q-Version Flat Jelly Card */
+        .jelly-card {
+            background: white;
+            border: none; /* Removed black stroke */
+            box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.08), 0 4px 12px -4px rgba(0, 0, 0, 0.04);
+            border-radius: 2.5rem;
+            transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .jelly-card::after {
+            content: '';
+            position: absolute;
+            top: 8px;
+            left: 16px;
+            width: 35%;
+            height: 12px;
+            background: rgba(255, 255, 255, 0.4);
+            border-radius: 20px;
+            pointer-events: none;
+            opacity: 0.8;
+        }
+
+        .jelly-card:active {
+            transform: scale(0.96);
+        }
+
+        /* Q-Version Button */
+        .jelly-button {
+            border: none; /* Removed black stroke */
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+            border-radius: 1.5rem;
+            transition: all 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .jelly-button::after {
+            content: '';
+            position: absolute;
+            top: 4px;
+            left: 8px;
+            width: 25%;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+            pointer-events: none;
+        }
+
+        .jelly-button:active {
+            transform: scale(0.92);
+        }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.12);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+
+        @keyframes jelly-bounce {
+            0%, 100% { transform: scale(1, 1); }
+            30% { transform: scale(1.15, 0.85); }
+            50% { transform: scale(0.9, 1.1); }
+            80% { transform: scale(1.05, 0.95); }
+        }
+
+        .animate-jelly {
+            animation: jelly-bounce 0.6s ease;
+        }
+
+        .reading-bg {
+            background: radial-gradient(circle at center, #1a1c2c 0%, #05070a 100%);
+        }
+
+        /* Q-version Folder Style Helper */
+        .q-folder-blob {
+            border-radius: 35% 65% 65% 35% / 35% 35% 65% 65%;
+            transition: border-radius 0.3s ease;
+        }
+        
+        .jelly-card:hover .q-folder-blob {
+            border-radius: 50% 50% 50% 50% / 50% 50% 50% 50%;
+        }
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3",
+    "@google/genai": "https://esm.sh/@google/genai@^1.34.0"
+  }
+}
+</script>
+</head>
+<body>
+    <div id="root"></div>
+</body>
+</html>
