@@ -128,7 +128,7 @@ const translations = {
   }
 };
 
-const DEFAULT_BASE_SCALE = 0.8;
+const DEFAULT_BASE_SCALE = 1.0;
 
 const App: React.FC = () => {
   const [lang, setLang] = useState<'zh' | 'en'>(() => (localStorage.getItem('vault_lang') as 'zh' | 'en') || 'zh');
@@ -235,9 +235,13 @@ const App: React.FC = () => {
     setIsCreatingFolder(false);
   };
 
+  const handleFolderRename = (folder: Folder) => {
+    setEditingFolder({ ...folder });
+  };
+
   const handleFolderPointerDown = (folder: Folder) => {
     folderLongPressTimer.current = window.setTimeout(() => {
-      setEditingFolder({ ...folder });
+      handleFolderRename(folder);
       folderLongPressTimer.current = null;
     }, 600);
   };
@@ -287,7 +291,8 @@ const App: React.FC = () => {
       dragStartPosRef.current = { x: e.clientX, y: e.clientY };
       initialPanRef.current = { ...panOffset };
     } else if (pointersRef.current.size === 2) {
-      const p = Array.from(pointersRef.current.values());
+      // Fix: Explicitly cast Array.from result to coordinate array to avoid unknown property access errors
+      const p = Array.from(pointersRef.current.values()) as { x: number, y: number }[];
       lastDistRef.current = Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y);
       initialScaleRef.current = zoomScale;
     }
@@ -303,7 +308,8 @@ const App: React.FC = () => {
       const dy = e.clientY - dragStartPosRef.current.y;
       setPanOffset({ x: initialPanRef.current.x + dx, y: initialPanRef.current.y + dy });
     } else if (pointersRef.current.size === 2) {
-      const p = Array.from(pointersRef.current.values());
+      // Fix: Explicitly cast Array.from result to coordinate array to avoid unknown property access errors
+      const p = Array.from(pointersRef.current.values()) as { x: number, y: number }[];
       const dist = Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y);
       const ratio = dist / lastDistRef.current;
       setZoomScale(Math.min(Math.max(initialScaleRef.current * ratio, 0.2), 10));
@@ -314,7 +320,8 @@ const App: React.FC = () => {
     pointersRef.current.delete(e.pointerId);
     if (pointersRef.current.size < 2) lastDistRef.current = 0;
     if (pointersRef.current.size === 1) {
-      const remainingPointer = Array.from(pointersRef.current.values())[0];
+      // Fix: Explicitly cast remaining pointer to coordinate object to avoid unknown property access errors
+      const remainingPointer = Array.from(pointersRef.current.values())[0] as { x: number, y: number };
       dragStartPosRef.current = { x: remainingPointer.x, y: remainingPointer.y };
       initialPanRef.current = { ...panOffset };
     }
@@ -571,11 +578,21 @@ const App: React.FC = () => {
           </div>
           
           <div className="w-full h-full flex items-center justify-center relative overflow-hidden">
-            {/* Enhanced Nav Buttons for Mobile Visibility */}
+            {/* Minimal Navigation Buttons for Mobile */}
             {!isAnnotating && (
               <>
-                <button onClick={prevReading} className="absolute left-4 top-1/2 -translate-y-1/2 z-[115] bg-white/20 backdrop-blur-lg p-5 rounded-full text-white shadow-xl active:scale-90 transition-transform"><ChevronLeftIcon size={40} strokeWidth={3}/></button>
-                <button onClick={nextReading} className="absolute right-4 top-1/2 -translate-y-1/2 z-[115] bg-white/20 backdrop-blur-lg p-5 rounded-full text-white shadow-xl active:scale-90 transition-transform"><ChevronRightIcon size={40} strokeWidth={3}/></button>
+                <button 
+                  onClick={prevReading} 
+                  className="absolute left-2 top-1/2 -translate-y-1/2 z-[115] p-2 text-white/50 active:text-white active:scale-90 transition-all"
+                >
+                  <ChevronLeftIcon size={32} strokeWidth={2.5}/>
+                </button>
+                <button 
+                  onClick={nextReading} 
+                  className="absolute right-2 top-1/2 -translate-y-1/2 z-[115] p-2 text-white/50 active:text-white active:scale-90 transition-all"
+                >
+                  <ChevronRightIcon size={32} strokeWidth={2.5}/>
+                </button>
               </>
             )}
 
