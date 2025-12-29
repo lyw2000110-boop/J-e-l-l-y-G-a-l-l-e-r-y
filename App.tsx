@@ -160,6 +160,7 @@ const App: React.FC = () => {
   const initialScaleRef = useRef<number>(DEFAULT_BASE_SCALE);
   const dragStartPosRef = useRef<{ x: number, y: number }>({ x: 0, y: 0 });
   const initialPanRef = useRef<{ x: number, y: number }>({ x: 0, y: 0 });
+  const initialMidpointRef = useRef<{ x: number, y: number }>({ x: 0, y: 0 });
 
   const gridLongPressTimer = useRef<number | null>(null);
   const folderLongPressTimer = useRef<number | null>(null);
@@ -283,7 +284,6 @@ const App: React.FC = () => {
 
   // --- Reading Mode Smooth Interaction Logic ---
   const handleReadingPointerDown = (e: React.PointerEvent) => {
-    // 移除 isAnnotating 限制，允许在涂鸦模式下接收缩放指令
     e.currentTarget.setPointerCapture(e.pointerId);
     pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
@@ -291,13 +291,14 @@ const App: React.FC = () => {
       dragStartPosRef.current = { x: e.clientX, y: e.clientY };
       initialPanRef.current = { ...panOffset };
     } else if (pointersRef.current.size === 2) {
-      // 当检测到第二个手指时，如果正在绘图，强制停止
       if (isAnnotating) {
         isDrawingRef.current = false;
       }
       const p = Array.from(pointersRef.current.values()) as { x: number, y: number }[];
       lastDistRef.current = Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y);
       initialScaleRef.current = zoomScale;
+      initialMidpointRef.current = { x: (p[0].x + p[1].x) / 2, y: (p[0].y + p[1].y) / 2 };
+      initialPanRef.current = { ...panOffset };
     }
   };
 
@@ -306,19 +307,27 @@ const App: React.FC = () => {
     pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
     if (pointersRef.current.size === 1) {
-      // 只有在非绘图状态下才允许单指拖拽（避免绘图时画面乱跑）
-      if (!isDrawingRef.current) {
+      // 涂鸦模式下，单指不移动图片
+      if (!isAnnotating && !isDrawingRef.current) {
         const dx = e.clientX - dragStartPosRef.current.x;
         const dy = e.clientY - dragStartPosRef.current.y;
         setPanOffset({ x: initialPanRef.current.x + dx, y: initialPanRef.current.y + dy });
       }
     } else if (pointersRef.current.size === 2) {
-      // 多指操作时，确保绘图状态为 false
       if (isAnnotating) isDrawingRef.current = false;
       const p = Array.from(pointersRef.current.values()) as { x: number, y: number }[];
+      
+      // 双指操作时更新缩放
       const dist = Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y);
       const ratio = dist / lastDistRef.current;
-      setZoomScale(Math.min(Math.max(initialScaleRef.current * ratio, 0.2), 10));
+      const newScale = Math.min(Math.max(initialScaleRef.current * ratio, 0.2), 10);
+      setZoomScale(newScale);
+
+      // 双指操作时更新位置（平移），方便在涂鸦模式下调整视野
+      const currentMidpoint = { x: (p[0].x + p[1].x) / 2, y: (p[0].y + p[1].y) / 2 };
+      const dx = currentMidpoint.x - initialMidpointRef.current.x;
+      const dy = currentMidpoint.y - initialMidpointRef.current.y;
+      setPanOffset({ x: initialPanRef.current.x + dx, y: initialPanRef.current.y + dy });
     }
   };
 
@@ -372,7 +381,6 @@ const App: React.FC = () => {
 
   const handleDrawStart = (e: React.PointerEvent) => {
     if (!isAnnotating) return;
-    // 只有单指触控时才允许开始绘图
     if (pointersRef.current.size > 1) return;
     
     isDrawingRef.current = true;
@@ -389,7 +397,6 @@ const App: React.FC = () => {
 
   const handleDrawing = (e: React.PointerEvent) => {
     if (!isDrawingRef.current || !isAnnotating) return;
-    // 绘图过程中如果变成了多指，立即停止
     if (pointersRef.current.size > 1) {
       isDrawingRef.current = false;
       return;
@@ -612,7 +619,6 @@ const App: React.FC = () => {
 
             {isAnnotating ? (
               <div className="relative flex flex-col items-center justify-center w-full h-full p-2">
-                {/* 涂鸦模式下也应用同样的变换样式，实现缩放平移 */}
                 <div className="transition-transform duration-75 ease-out will-change-transform" style={{ transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomScale})` }}>
                   <canvas ref={annotationCanvasRef} onPointerDown={handleDrawStart} onPointerMove={handleDrawing} onPointerUp={handleDrawEnd} className="max-w-[95vw] max-h-[75vh] shadow-2xl bg-black/10 rounded-lg touch-none" />
                 </div>
