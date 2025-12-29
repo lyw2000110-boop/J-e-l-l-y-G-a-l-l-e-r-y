@@ -283,7 +283,7 @@ const App: React.FC = () => {
 
   // --- Reading Mode Smooth Interaction Logic ---
   const handleReadingPointerDown = (e: React.PointerEvent) => {
-    if (isAnnotating) return;
+    // 移除 isAnnotating 限制，允许在涂鸦模式下接收缩放指令
     e.currentTarget.setPointerCapture(e.pointerId);
     pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
@@ -291,7 +291,10 @@ const App: React.FC = () => {
       dragStartPosRef.current = { x: e.clientX, y: e.clientY };
       initialPanRef.current = { ...panOffset };
     } else if (pointersRef.current.size === 2) {
-      // Fix: Explicitly cast Array.from result to coordinate array to avoid unknown property access errors
+      // 当检测到第二个手指时，如果正在绘图，强制停止
+      if (isAnnotating) {
+        isDrawingRef.current = false;
+      }
       const p = Array.from(pointersRef.current.values()) as { x: number, y: number }[];
       lastDistRef.current = Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y);
       initialScaleRef.current = zoomScale;
@@ -299,16 +302,19 @@ const App: React.FC = () => {
   };
 
   const handleReadingPointerMove = (e: React.PointerEvent) => {
-    if (isAnnotating) return;
     if (!pointersRef.current.has(e.pointerId)) return;
     pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
     if (pointersRef.current.size === 1) {
-      const dx = e.clientX - dragStartPosRef.current.x;
-      const dy = e.clientY - dragStartPosRef.current.y;
-      setPanOffset({ x: initialPanRef.current.x + dx, y: initialPanRef.current.y + dy });
+      // 只有在非绘图状态下才允许单指拖拽（避免绘图时画面乱跑）
+      if (!isDrawingRef.current) {
+        const dx = e.clientX - dragStartPosRef.current.x;
+        const dy = e.clientY - dragStartPosRef.current.y;
+        setPanOffset({ x: initialPanRef.current.x + dx, y: initialPanRef.current.y + dy });
+      }
     } else if (pointersRef.current.size === 2) {
-      // Fix: Explicitly cast Array.from result to coordinate array to avoid unknown property access errors
+      // 多指操作时，确保绘图状态为 false
+      if (isAnnotating) isDrawingRef.current = false;
       const p = Array.from(pointersRef.current.values()) as { x: number, y: number }[];
       const dist = Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y);
       const ratio = dist / lastDistRef.current;
@@ -320,7 +326,6 @@ const App: React.FC = () => {
     pointersRef.current.delete(e.pointerId);
     if (pointersRef.current.size < 2) lastDistRef.current = 0;
     if (pointersRef.current.size === 1) {
-      // Fix: Explicitly cast remaining pointer to coordinate object to avoid unknown property access errors
       const remainingPointer = Array.from(pointersRef.current.values())[0] as { x: number, y: number };
       dragStartPosRef.current = { x: remainingPointer.x, y: remainingPointer.y };
       initialPanRef.current = { ...panOffset };
@@ -367,6 +372,9 @@ const App: React.FC = () => {
 
   const handleDrawStart = (e: React.PointerEvent) => {
     if (!isAnnotating) return;
+    // 只有单指触控时才允许开始绘图
+    if (pointersRef.current.size > 1) return;
+    
     isDrawingRef.current = true;
     const canvas = annotationCanvasRef.current;
     if (!canvas) return;
@@ -381,6 +389,12 @@ const App: React.FC = () => {
 
   const handleDrawing = (e: React.PointerEvent) => {
     if (!isDrawingRef.current || !isAnnotating) return;
+    // 绘图过程中如果变成了多指，立即停止
+    if (pointersRef.current.size > 1) {
+      isDrawingRef.current = false;
+      return;
+    }
+    
     const canvas = annotationCanvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -598,7 +612,10 @@ const App: React.FC = () => {
 
             {isAnnotating ? (
               <div className="relative flex flex-col items-center justify-center w-full h-full p-2">
-                <canvas ref={annotationCanvasRef} onPointerDown={handleDrawStart} onPointerMove={handleDrawing} onPointerUp={handleDrawEnd} className="max-w-[95vw] max-h-[75vh] shadow-2xl bg-black/10 rounded-lg touch-none" />
+                {/* 涂鸦模式下也应用同样的变换样式，实现缩放平移 */}
+                <div className="transition-transform duration-75 ease-out will-change-transform" style={{ transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomScale})` }}>
+                  <canvas ref={annotationCanvasRef} onPointerDown={handleDrawStart} onPointerMove={handleDrawing} onPointerUp={handleDrawEnd} className="max-w-[95vw] max-h-[75vh] shadow-2xl bg-black/10 rounded-lg touch-none" />
+                </div>
                 <div className="absolute bottom-8 flex flex-col items-center gap-3">
                   <div className="flex gap-2 glass-panel p-2 rounded-full">{annotationColors.map(c => <button key={c} onClick={() => setStrokeColor(c)} className={`w-8 h-8 rounded-full border-2 ${strokeColor === c ? 'scale-125 border-white' : 'border-transparent'}`} style={{ backgroundColor: c }} />)}</div>
                   <div className="flex gap-3">
