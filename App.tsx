@@ -139,7 +139,6 @@ const App: React.FC = () => {
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [editingFolder, setEditingFolder] = useState<Folder | null>(null);
-  const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [folderSearchQuery, setFolderSearchQuery] = useState('');
@@ -191,12 +190,6 @@ const App: React.FC = () => {
   }, [folders, isInitializing]);
 
   const activeFolder = folders.find(f => f.id === activeFolderId);
-
-  const allTags = useMemo(() => {
-    const tags = new Set<string>();
-    folders.forEach(f => f.images.forEach(img => img.tags?.forEach(t => tags.add(t))));
-    return Array.from(tags).sort();
-  }, [folders]);
 
   const filteredFolders = useMemo(() => {
     return folders.filter(folder => {
@@ -282,17 +275,27 @@ const App: React.FC = () => {
     }
   };
 
-  // --- Reading Mode Smooth Interaction Logic ---
+  // --- Consolidated Interaction Handlers ---
   const handleReadingPointerDown = (e: React.PointerEvent) => {
+    // 解决“无法退出”问题：如果是点击在按钮上，不启用平移/缩放逻辑
+    const target = e.target as HTMLElement;
+    if (target.closest('button')) return;
+
     e.currentTarget.setPointerCapture(e.pointerId);
     pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
     if (pointersRef.current.size === 1) {
       dragStartPosRef.current = { x: e.clientX, y: e.clientY };
       initialPanRef.current = { ...panOffset };
-    } else if (pointersRef.current.size === 2) {
+      
+      // 涂鸦准备
       if (isAnnotating) {
-        isDrawingRef.current = false;
+        startDrawingAt(e.clientX, e.clientY);
+      }
+    } else if (pointersRef.current.size === 2) {
+      // 切换到多指：强制结束绘画
+      if (isDrawingRef.current) {
+        stopDrawing();
       }
       const p = Array.from(pointersRef.current.values()) as { x: number, y: number }[];
       lastDistRef.current = Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y);
@@ -307,23 +310,24 @@ const App: React.FC = () => {
     pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
     if (pointersRef.current.size === 1) {
-      // 涂鸦模式下，单指不移动图片
-      if (!isAnnotating && !isDrawingRef.current) {
+      if (isAnnotating && isDrawingRef.current) {
+        // 涂鸦：单指绘制
+        drawAt(e.clientX, e.clientY);
+      } else if (!isAnnotating) {
+        // 非涂鸦模式：单指平移
         const dx = e.clientX - dragStartPosRef.current.x;
         const dy = e.clientY - dragStartPosRef.current.y;
         setPanOffset({ x: initialPanRef.current.x + dx, y: initialPanRef.current.y + dy });
       }
     } else if (pointersRef.current.size === 2) {
-      if (isAnnotating) isDrawingRef.current = false;
+      // 双指：任何模式下都允许缩放和平移视野
       const p = Array.from(pointersRef.current.values()) as { x: number, y: number }[];
       
-      // 双指操作时更新缩放
       const dist = Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y);
       const ratio = dist / lastDistRef.current;
       const newScale = Math.min(Math.max(initialScaleRef.current * ratio, 0.2), 10);
       setZoomScale(newScale);
 
-      // 双指操作时更新位置（平移），方便在涂鸦模式下调整视野
       const currentMidpoint = { x: (p[0].x + p[1].x) / 2, y: (p[0].y + p[1].y) / 2 };
       const dx = currentMidpoint.x - initialMidpointRef.current.x;
       const dy = currentMidpoint.y - initialMidpointRef.current.y;
@@ -332,6 +336,9 @@ const App: React.FC = () => {
   };
 
   const handleReadingPointerUp = (e: React.PointerEvent) => {
+    if (isDrawingRef.current) {
+      stopDrawing();
+    }
     pointersRef.current.delete(e.pointerId);
     if (pointersRef.current.size < 2) lastDistRef.current = 0;
     if (pointersRef.current.size === 1) {
@@ -339,6 +346,53 @@ const App: React.FC = () => {
       dragStartPosRef.current = { x: remainingPointer.x, y: remainingPointer.y };
       initialPanRef.current = { ...panOffset };
     }
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
+  };
+
+  // --- Drawing Logic ---
+  const startDrawingAt = (clientX: number, clientY: number) => {
+    const canvas = annotationCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    // 即使在变换（scale/translate）下，rect 也是相对于视口的视觉盒子
+    // clientX - rect.left / rect.width 得到的是在当前视觉盒子中的百分比坐标
+    const x = (clientX - rect.left) * (canvas.width / rect.width);
+    const y = (clientY - rect.top) * (canvas.height / rect.height);
+
+    isDrawingRef.current = true;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = Math.max(canvas.width, canvas.height) / 100;
+  };
+
+  const drawAt = (clientX: number, clientY: number) => {
+    const canvas = annotationCanvasRef.current;
+    if (!canvas || !isDrawingRef.current) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = (clientX - rect.left) * (canvas.width / rect.width);
+    const y = (clientY - rect.top) * (canvas.height / rect.height);
+
+    ctx.lineTo(x, y);
+    ctx.stroke();
+  };
+
+  const stopDrawing = () => {
+    if (isDrawingRef.current && isAnnotating) {
+      const canvas = annotationCanvasRef.current;
+      if (canvas) setHistory(prev => [...prev, canvas.toDataURL()]);
+    }
+    isDrawingRef.current = false;
   };
 
   const nextReading = (e?: React.MouseEvent) => {
@@ -363,6 +417,7 @@ const App: React.FC = () => {
     setHistory([]);
     setZoomScale(1.0);
     setPanOffset({ x: 0, y: 0 });
+    // 等待 React 渲染 Canvas 后再初始化
     setTimeout(() => {
       const canvas = annotationCanvasRef.current;
       if (!canvas) return;
@@ -377,47 +432,6 @@ const App: React.FC = () => {
       };
       img.src = (currentReadingItem as ImageItem).data;
     }, 100);
-  };
-
-  const handleDrawStart = (e: React.PointerEvent) => {
-    if (!isAnnotating) return;
-    if (pointersRef.current.size > 1) return;
-    
-    isDrawingRef.current = true;
-    const canvas = annotationCanvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    const rect = canvas.getBoundingClientRect();
-    const x = (e.clientX - rect.left) * (canvas.width / rect.width);
-    const y = (e.clientY - rect.top) * (canvas.height / rect.height);
-    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    ctx.strokeStyle = strokeColor; ctx.lineWidth = Math.max(canvas.width, canvas.height) / 100;
-  };
-
-  const handleDrawing = (e: React.PointerEvent) => {
-    if (!isDrawingRef.current || !isAnnotating) return;
-    if (pointersRef.current.size > 1) {
-      isDrawingRef.current = false;
-      return;
-    }
-    
-    const canvas = annotationCanvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    const rect = canvas.getBoundingClientRect();
-    const x = (e.clientX - rect.left) * (canvas.width / rect.width);
-    const y = (e.clientY - rect.top) * (canvas.height / rect.height);
-    ctx.lineTo(x, y); ctx.stroke();
-  };
-
-  const handleDrawEnd = () => {
-    if (isDrawingRef.current && isAnnotating) {
-      const canvas = annotationCanvasRef.current;
-      if (canvas) setHistory(prev => [...prev, canvas.toDataURL()]);
-    }
-    isDrawingRef.current = false;
   };
 
   const saveAnnotation = () => {
@@ -589,8 +603,8 @@ const App: React.FC = () => {
           onPointerUp={handleReadingPointerUp}
           onPointerCancel={handleReadingPointerUp}
         >
-          {/* Header UI */}
-          <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center bg-gradient-to-b from-black/80 to-transparent z-[110]">
+          {/* Header UI - 使用 stopPropagation 确保按钮可点击 */}
+          <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center bg-gradient-to-b from-black/80 to-transparent z-[110]" onPointerDown={e => e.stopPropagation()}>
             <div className="glass-panel px-3 py-1 rounded-full"><span className="text-white font-black text-xs">{readingIndex + 1} / {filteredItems.length}</span></div>
             <div className="flex gap-2">
                {!isAnnotating && currentReadingItem.itemType === 'image' && <button onClick={startAnnotating} className="jelly-button p-2 bg-[#ffeb3b]"><PencilIcon size={16} /></button>}
@@ -598,31 +612,33 @@ const App: React.FC = () => {
             </div>
           </div>
           
-          <div className="w-full h-full flex items-center justify-center relative overflow-hidden">
-            {/* Minimal Navigation Buttons for Mobile */}
+          <div className="w-full h-full flex items-center justify-center relative overflow-hidden pointer-events-none">
+            {/* Minimal Navigation Buttons */}
             {!isAnnotating && (
-              <>
+              <div className="absolute inset-0 flex items-center justify-between px-2 pointer-events-none z-[115]">
                 <button 
                   onClick={prevReading} 
-                  className="absolute left-2 top-1/2 -translate-y-1/2 z-[115] p-2 text-white/50 active:text-white active:scale-90 transition-all"
+                  onPointerDown={e => e.stopPropagation()}
+                  className="p-2 text-white/50 active:text-white active:scale-90 transition-all pointer-events-auto"
                 >
                   <ChevronLeftIcon size={32} strokeWidth={2.5}/>
                 </button>
                 <button 
                   onClick={nextReading} 
-                  className="absolute right-2 top-1/2 -translate-y-1/2 z-[115] p-2 text-white/50 active:text-white active:scale-90 transition-all"
+                  onPointerDown={e => e.stopPropagation()}
+                  className="p-2 text-white/50 active:text-white active:scale-90 transition-all pointer-events-auto"
                 >
                   <ChevronRightIcon size={32} strokeWidth={2.5}/>
                 </button>
-              </>
+              </div>
             )}
 
             {isAnnotating ? (
-              <div className="relative flex flex-col items-center justify-center w-full h-full p-2">
+              <div className="relative flex flex-col items-center justify-center w-full h-full p-2 pointer-events-auto">
                 <div className="transition-transform duration-75 ease-out will-change-transform" style={{ transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomScale})` }}>
-                  <canvas ref={annotationCanvasRef} onPointerDown={handleDrawStart} onPointerMove={handleDrawing} onPointerUp={handleDrawEnd} className="max-w-[95vw] max-h-[75vh] shadow-2xl bg-black/10 rounded-lg touch-none" />
+                  <canvas ref={annotationCanvasRef} className="max-w-[95vw] max-h-[75vh] shadow-2xl bg-black/10 rounded-lg touch-none" />
                 </div>
-                <div className="absolute bottom-8 flex flex-col items-center gap-3">
+                <div className="absolute bottom-8 flex flex-col items-center gap-3 z-[120]" onPointerDown={e => e.stopPropagation()}>
                   <div className="flex gap-2 glass-panel p-2 rounded-full">{annotationColors.map(c => <button key={c} onClick={() => setStrokeColor(c)} className={`w-8 h-8 rounded-full border-2 ${strokeColor === c ? 'scale-125 border-white' : 'border-transparent'}`} style={{ backgroundColor: c }} />)}</div>
                   <div className="flex gap-3">
                     <button onClick={() => setIsAnnotating(false)} className="jelly-button px-6 py-3 bg-[#ff5252] text-white font-black">{t.cancel}</button>
@@ -631,11 +647,11 @@ const App: React.FC = () => {
                 </div>
               </div>
             ) : (
-              <div className="transition-transform duration-75 ease-out will-change-transform" style={{ transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomScale})` }}>
+              <div className="transition-transform duration-75 ease-out will-change-transform pointer-events-auto" style={{ transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomScale})` }}>
                 {currentReadingItem.itemType === 'image' ? (
-                  <img src={(currentReadingItem as ImageItem).data} className="max-w-[95vw] max-h-[85vh] object-contain rounded-lg shadow-2xl" />
+                  <img src={(currentReadingItem as ImageItem).data} className="max-w-[95vw] max-h-[85vh] object-contain rounded-lg shadow-2xl pointer-events-none" />
                 ) : (
-                  <div className="max-w-[80vw] w-full jelly-card bg-[#fdfcf0] p-10 max-h-[70vh] overflow-y-auto no-scrollbar"><div className="text-lg font-bold text-slate-800 leading-relaxed whitespace-pre-wrap">{currentReadingItem.content}</div></div>
+                  <div className="max-w-[80vw] w-full jelly-card bg-[#fdfcf0] p-10 max-h-[70vh] overflow-y-auto no-scrollbar pointer-events-auto"><div className="text-lg font-bold text-slate-800 leading-relaxed whitespace-pre-wrap">{currentReadingItem.content}</div></div>
                 )}
               </div>
             )}
@@ -643,7 +659,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Modals with Animation */}
+      {/* Modals */}
       {editingFolder && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-6 bg-black/40 overlay-fade">
           <div className="jelly-card bg-white w-full max-w-[280px] p-6 jelly-pop">
